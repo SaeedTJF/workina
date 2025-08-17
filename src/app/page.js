@@ -1,103 +1,190 @@
-import Image from "next/image";
+"use client";
+import { useEffect, useMemo, useState } from "react";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.js
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [authMode, setAuthMode] = useState("login");
+  const [authForm, setAuthForm] = useState({ email: "", password: "", name: "" });
+  const [taskForm, setTaskForm] = useState({ title: "", description: "" });
+  const [periods, setPeriods] = useState([]);
+  const [now, setNow] = useState(Date.now());
+  const [tasks, setTasks] = useState([]);
+  const [dailyTotals, setDailyTotals] = useState([]);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    fetch("/api/me").then(async (r) => {
+      if (r.ok) {
+        const d = await r.json();
+        setUser(d.user);
+        loadData();
+      }
+      setLoading(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    const i = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(i);
+  }, []);
+
+  function toLocalInputValue(date) {
+    const d = new Date(date);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  async function loadData() {
+    const [wp, ts] = await Promise.all([
+      fetch("/api/work").then((r) => (r.ok ? r.json() : { periods: [] })),
+      fetch("/api/tasks").then((r) => (r.ok ? r.json() : { tasks: [] })),
+    ]);
+    const periods = wp.periods || []
+    setPeriods(periods);
+    setTasks(ts.tasks || []);
+    // compute daily totals in ms
+    const totals = {};
+    for (const p of periods) {
+      const start = new Date(p.startedAt)
+      const stop = p.stoppedAt ? new Date(p.stoppedAt) : new Date()
+      const key = start.toLocaleDateString('fa-IR')
+      totals[key] = (totals[key] || 0) + (stop - start)
+    }
+    setDailyTotals(Object.entries(totals).map(([date, ms]) => ({ date, ms })))
+  }
+
+  async function submitAuth(e) {
+    e.preventDefault();
+    setLoading(true);
+    const url = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(authForm),
+    });
+    setLoading(false);
+    if (res.ok) {
+      const d = await res.json();
+      setUser(d);
+      await loadData();
+    } else {
+      alert("خطا در احراز هویت");
+    }
+  }
+
+  const hasOpen = useMemo(() => periods.some((p) => !p.stoppedAt), [periods]);
+  const openPeriod = useMemo(() => periods.find((p) => !p.stoppedAt) || null, [periods]);
+
+  async function startWork() {
+    const res = await fetch("/api/work", { method: "POST" });
+    if (res.ok) {
+      await loadData();
+    }
+  }
+  async function stopWork() {
+    const res = await fetch("/api/work", { method: "PATCH" });
+    if (res.ok) {
+      await loadData();
+    }
+  }
+
+  async function addTask(e) {
+    e.preventDefault();
+    const res = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(taskForm),
+    });
+    if (res.ok) {
+      setTaskForm({ title: "", description: "" });
+      await loadData();
+    }
+  }
+
+  function formatDuration(ms) {
+    const s = Math.floor(ms / 1000)
+    const hh = String(Math.floor(s / 3600)).padStart(2, '0')
+    const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0')
+    const ss = String(s % 60).padStart(2, '0')
+    return `${hh}:${mm}:${ss}`
+  }
+
+  if (loading) return <div className="p-6">در حال بارگذاری...</div>;
+
+  if (!user) {
+    return (
+      <div className="max-w-md w-full mx-auto p-6">
+        <div className="flex mb-4 gap-2">
+          <button className={`${authMode === "login" ? "font-bold" : ""}`} onClick={() => setAuthMode("login")}>ورود</button>
+          <button className={`${authMode === "register" ? "font-bold" : ""}`} onClick={() => setAuthMode("register")}>ثبت‌نام</button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <form onSubmit={submitAuth} className="flex flex-col gap-3">
+          {authMode === "register" && (
+            <input className="border p-2 rounded" placeholder="نام" value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} />
+          )}
+          <input className="border p-2 rounded" type="text" placeholder="ایمیل یا نام‌کاربری" value={authForm.email} onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })} />
+          <input className="border p-2 rounded" type="password" placeholder="رمز عبور" value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} />
+          <button className="bg-black text-white rounded p-2" type="submit">{authMode === "login" ? "ورود" : "ثبت‌نام"}</button>
+        </form>
+        <div className="text-xs text-gray-500 mt-3">ادمین: نام‌کاربری <b>admin</b>، رمز <b>6006296</b></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto p-6 flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <div>کاربر: {user.email}</div>
+        <div className="flex gap-2">
+          {!hasOpen && <button className="bg-green-600 text-white px-3 py-1 rounded" onClick={startWork}>استارت</button>}
+          {hasOpen && <button className="bg-red-600 text-white px-3 py-1 rounded" onClick={stopWork}>استاپ</button>}
+          <button className="bg-gray-200 px-3 py-1 rounded" onClick={async () => { await fetch('/api/auth/login', { method: 'DELETE' }); location.reload(); }}>خروج</button>
+        </div>
+      </div>
+
+      {openPeriod && (
+        <div className="text-sm">مدت زمان سپری‌شده: {formatDuration(now - new Date(openPeriod.startedAt).getTime())}</div>
+      )}
+
+      <section className="border rounded p-4">
+        <h3 className="font-bold mb-3">ثبت تسک امروز</h3>
+        <form onSubmit={addTask} className="flex flex-col gap-3">
+          <input className="border p-2 rounded" placeholder="عنوان تسک" value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} />
+          <textarea className="border p-2 rounded" placeholder="توضیحات (اختیاری)" value={taskForm.description} onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })} />
+          <button className="bg-black text-white rounded p-2" type="submit">افزودن</button>
+        </form>
+      </section>
+
+      <section className="border rounded p-4">
+        <h3 className="font-bold mb-3">سوابق استارت/استاپ</h3>
+        <ul className="space-y-2">
+          {periods.map((p) => (
+            <li key={p.id} className="text-sm">
+              شروع: {new Date(p.startedAt).toLocaleString("fa-IR")} — پایان: {p.stoppedAt ? new Date(p.stoppedAt).toLocaleString("fa-IR") : "در حال کار"}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="border rounded p-4">
+        <h3 className="font-bold mb-3">مجموع کارکرد روزانه</h3>
+        <ul className="space-y-2">
+          {dailyTotals.map((d) => (
+            <li key={d.date} className="text-sm">{d.date}: {formatDuration(d.ms)}</li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="border rounded p-4">
+        <h3 className="font-bold mb-3">تسک‌های امروز</h3>
+        <ul className="space-y-2">
+          {tasks.map((t) => (
+            <li key={t.id} className="text-sm">
+              {t.title} — {t.description || ""} — {new Date(t.occurredAt).toLocaleString("fa-IR")}
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 }
