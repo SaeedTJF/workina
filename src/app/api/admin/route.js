@@ -11,6 +11,7 @@ export async function GET() {
     include: {
       workPeriods: { orderBy: { startedAt: 'desc' } },
       tasks: { orderBy: { occurredAt: 'desc' } },
+      userProjects: { include: { project: true } },
     },
     orderBy: { createdAt: 'desc' },
   })

@@ -7,16 +7,28 @@ export default function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState(0);
   const [selected, setSelected] = useState(null);
+  const [projects, setProjects] = useState([])
+  const [newProject, setNewProject] = useState('')
+  const [newProjectColor, setNewProjectColor] = useState('#5470C6')
+  const [colorDrafts, setColorDrafts] = useState({})
 
   useEffect(() => {
     fetch('/api/admin').then(async r => {
       setLoading(false);
       if (r.ok) setData(await r.json());
     })
+    fetch('/api/admin/projects').then(async r => {
+      if (r.ok) setProjects((await r.json()).projects)
+    })
   }, []);
 
   if (loading) return <div className="p-6">در حال بارگذاری...</div>;
-  if (!data) return <div className="p-6">عدم دسترسی</div>;
+  if (!data) return (
+    <div className="p-6">
+      <div className="mb-4">عدم دسترسی</div>
+      <a className="text-blue-600 underline" href="/">بازگشت</a>
+    </div>
+  );
 
   async function toggleEditPermission(userId, value) {
     setBusy(true)
@@ -28,7 +40,71 @@ export default function AdminPage() {
 
   return (
     <div className="max-w-5xl mx-auto p-6">
-      <h1 className="text-xl font-bold mb-4">پنل مدیریت</h1>
+      <section className="border rounded p-4 mb-6">
+        <h2 className="font-semibold mb-3">مدیریت پروژه‌ها</h2>
+        <div className="flex gap-2 mb-3 items-center">
+          <input className="border rounded p-2" placeholder="نام پروژه جدید" value={newProject} onChange={e => setNewProject(e.target.value)} />
+          <input className="w-10 h-10 p-0 border rounded" type="color" value={newProjectColor} onChange={e => setNewProjectColor(e.target.value)} />
+          <button className="bg-black text-white rounded px-3 py-2" onClick={async () => {
+            if (!newProject.trim()) return
+            const r = await fetch('/api/admin/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newProject.trim(), color: newProjectColor }) })
+            if (r.ok) {
+              const pr = await fetch('/api/admin/projects')
+              if (pr.ok) setProjects((await pr.json()).projects)
+              setNewProject('')
+              setNewProjectColor('#5470C6')
+            }
+          }}>ایجاد</button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="p-2 text-right">نام</th>
+                <th className="p-2 text-right">رنگ</th>
+                <th className="p-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.map(p => (
+                <tr key={p.id} className="border-t">
+                  <td className="p-2">{p.name}</td>
+                  <td className="p-2">
+                    <div className="flex items-center gap-2">
+                      <input type="color" className="w-10 h-10 p-0 border rounded" value={colorDrafts[p.id] ?? p.color ?? '#5470C6'} onChange={e => setColorDrafts({ ...colorDrafts, [p.id]: e.target.value })} />
+                      <button className="bg-gray-200 rounded px-2 py-1" onClick={async () => {
+                        const chosen = (colorDrafts[p.id] ?? p.color ?? '#5470C6')
+                        const r = await fetch('/api/admin/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: Number(p.id), color: chosen }) })
+                        if (r.ok) {
+                          const pr = await fetch('/api/admin/projects')
+                          if (pr.ok) setProjects((await pr.json()).projects)
+                        } else {
+                          console.error('Failed to save color', await r.text())
+                        }
+                      }}>ذخیره</button>
+                    </div>
+                  </td>
+                  <td className="p-2 text-left">
+                    <button className="text-red-600" onClick={async () => {
+                      if (!confirm('حذف این پروژه؟')) return
+                      await fetch('/api/admin/projects', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) })
+                      const pr = await fetch('/api/admin/projects')
+                      if (pr.ok) setProjects((await pr.json()).projects)
+                    }}>حذف</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold">پنل مدیریت</h1>
+        <div className="flex items-center gap-2">
+          <a className="bg-gray-200 rounded px-3 py-2" href="/">خانه</a>
+          <button className="bg-black text-white rounded px-3 py-2" onClick={async () => { await fetch('/api/auth/login', { method: 'DELETE' }); location.href = '/'; }}>خروج</button>
+        </div>
+      </div>
       <div className="flex gap-2 items-center mb-6">
         <select className="border rounded p-2" value={selectedUserId} onChange={e => setSelectedUserId(Number(e.target.value))}>
           <option value={0}>انتخاب کاربر...</option>
@@ -74,6 +150,24 @@ export default function AdminPage() {
               <label className="text-sm">اجازه ویرایش تاریخ/ساعت:</label>
               <input type="checkbox" disabled={busy} checked={u.mayEditTimes} onChange={e => toggleEditPermission(u.id, e.target.checked)} />
               {u.isAdmin && <span className="text-xs bg-black text-white rounded px-2 py-0.5">ادمین</span>}
+            </div>
+            <div className="mb-3">
+              <div className="text-sm mb-1">پروژه‌های اختصاص‌داده‌شده:</div>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {projects.map(p => {
+                  const assigned = (u.userProjects || []).some(up => up.projectId === p.id || up.project?.id === p.id)
+                  return (
+                    <label key={p.id} className="flex items-center gap-1 text-sm border rounded px-2 py-1">
+                      <input type="checkbox" checked={assigned} onChange={async e => {
+                        await fetch('/api/admin/projects/assign', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: u.id, projectId: p.id, assigned: e.target.checked }) })
+                        const r = await fetch('/api/admin')
+                        if (r.ok) setData(await r.json())
+                      }} />
+                      <span>{p.name}</span>
+                    </label>
+                  )
+                })}
+              </div>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
               <div>

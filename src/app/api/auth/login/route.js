@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
-import { signSessionToken, setAuthCookie, clearAuthCookie, ensureAdminUser } from '@/lib/auth'
+import { signSessionToken, ensureAdminUser } from '@/lib/auth'
 
 export async function POST(request) {
   try {
@@ -21,16 +21,24 @@ export async function POST(request) {
       return NextResponse.json({ message: 'رمز عبور نادرست است' }, { status: 401 })
     }
     const token = signSessionToken({ userId: user.id })
-    await setAuthCookie(token)
-    return NextResponse.json({ id: user.id, email: user.email, name: user.name })
+    const res = NextResponse.json({ id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin, mayEditTimes: user.mayEditTimes })
+    res.cookies.set('token', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
+    })
+    return res
   } catch (e) {
     return NextResponse.json({ message: 'خطای سرور' }, { status: 500 })
   }
 }
 
 export async function DELETE() {
-  await clearAuthCookie()
-  return NextResponse.json({ ok: true })
+  const res = NextResponse.json({ ok: true })
+  res.cookies.set('token', '', { httpOnly: true, maxAge: 0, path: '/' })
+  return res
 }
 
 

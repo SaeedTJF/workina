@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { clearAuthCookie } from '@/lib/auth'
 
 export async function POST() {
-  clearAuthCookie()
-  return NextResponse.json({ ok: true })
+  const res = NextResponse.json({ ok: true })
+  res.cookies.set('token', '', { httpOnly: true, maxAge: 0, path: '/' })
+  return res
 }
 
 

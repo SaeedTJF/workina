@@ -18,6 +18,7 @@ model User {
   createdAt    DateTime      @default(now())
   workPeriods  WorkPeriod[]
   tasks        Task[]
+  userProjects UserProject[]
 }
 
 model WorkPeriod {
@@ -27,6 +28,8 @@ model WorkPeriod {
   startedAt  DateTime
   stoppedAt  DateTime?
   createdAt  DateTime @default(now())
+  project    Project? @relation(fields: [projectId], references: [id])
+  projectId  Int?
 }
 
 model Task {
@@ -37,6 +40,29 @@ model Task {
   description String?
   occurredAt  DateTime @default(now())
   createdAt   DateTime @default(now())
+  project     Project? @relation(fields: [projectId], references: [id])
+  projectId   Int?
+}
+
+model Project {
+  id           Int            @id @default(autoincrement())
+  name         String         @unique
+  color        String?
+  createdAt    DateTime       @default(now())
+  tasks        Task[]
+  userProjects UserProject[]
+  workPeriods  WorkPeriod[]
+}
+
+model UserProject {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  project   Project  @relation(fields: [projectId], references: [id])
+  projectId Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, projectId])
 }
 
 

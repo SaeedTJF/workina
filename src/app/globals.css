@@ -3,6 +3,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --muted: #f3f4f6;
+  --muted-foreground: #4b5563;
+  --primary: #111827;
+  --primary-foreground: #ffffff;
+  --accent: #2563eb;
+  --accent-foreground: #ffffff;
 }
 
 @theme inline {
@@ -13,13 +19,46 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Disabled system preference; using class-based dark mode below */
+}
+
+/* Class-based dark mode to avoid relying on system preference */
+.dark {
+  --background: #0b0f19;
+  --foreground: #e5e7eb;
+  --muted: #111827;
+  --muted-foreground: #9ca3af;
+  --primary: #e5e7eb;
+  --primary-foreground: #0b0f19;
+  --accent: #3b82f6;
+  --accent-foreground: #0b0f19;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* Utility helpers for better contrast */
+.btn {
+  @apply rounded px-3 py-1 text-sm transition-colors;
+}
+.btn-primary { background: var(--accent); color: var(--accent-foreground); }
+.btn-primary:hover { filter: brightness(1.05); }
+.btn-muted { background: var(--muted); color: var(--foreground); }
+.btn-muted:hover { filter: brightness(0.98); }
+
+.card { @apply border rounded p-6; background: var(--background); }
+.input { @apply border rounded p-2 bg-transparent; }
+
+.dark .btn-muted { background: #1f2937; color: var(--foreground); }
+.dark .card { background: #0f172a; border-color: #1f2937; }
+.dark .input { border-color: #374151; }
+.dark .bg-gray-50 {
+  background-color: #1a202c; /* A darker background for dark mode headers */
+  color: var(--foreground); /* Ensure foreground color is used for text */
+}
+.dark .btn-muted {
+  background: #1f2937; /* Darker background for muted buttons in dark mode */
+  color: var(--foreground); /* Ensure foreground color is used for text */
 }
