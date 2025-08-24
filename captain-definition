@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "dockerfilePath": "./Dockerfile",
+  "dockerBuildContext": ".",
+  "secrets": {
+    "dockbase": {
+      "fileName": "/root/.ssh/id_rsa",
+      "secretName": "dockbase"
+    }
+  }
+}
