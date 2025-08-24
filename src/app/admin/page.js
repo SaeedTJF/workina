@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 export default function AdminPage() {
   const [data, setData] = useState(null);
@@ -26,7 +27,7 @@ export default function AdminPage() {
   if (!data) return (
     <div className="p-6">
       <div className="mb-4">عدم دسترسی</div>
-      <a className="text-blue-600 underline" href="/">بازگشت</a>
+      <Link className="text-blue-600 underline" href={"/"}>بازگشت</Link>
     </div>
   );
 
@@ -101,7 +102,7 @@ export default function AdminPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">پنل مدیریت</h1>
         <div className="flex items-center gap-2">
-          <a className="bg-gray-200 rounded px-3 py-2" href="/">خانه</a>
+          <Link className="bg-gray-200 rounded px-3 py-2" href={"/"}>خانه</Link>
           <button className="bg-black text-white rounded px-3 py-2" onClick={async () => { await fetch('/api/auth/login', { method: 'DELETE' }); location.href = '/'; }}>خروج</button>
         </div>
       </div>
