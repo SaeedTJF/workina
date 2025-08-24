@@ -7,12 +7,17 @@ WORKDIR /app
 # کپی کردن فایل‌های package.json و package-lock.json برای نصب وابستگی‌ها
 COPY package.json package-lock.json ./
 
+# پاک کردن کش npm
 RUN npm cache clean --force
+
 # نصب وابستگی‌ها با npm
 RUN npm ci
 
 # کپی کردن تمامی فایل‌های پروژه
 COPY . .
+
+# اجرای دستور prisma generate برای تولید فایل‌های Prisma Client
+RUN npx prisma generate
 
 # بیلد کردن اپلیکیشن برای محیط تولید
 RUN npm run build
@@ -33,7 +38,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
 # باز کردن پورت 3000 برای دسترسی به اپلیکیشن
-
+EXPOSE 3000
 
 # دستور اجرا: اجرای سرور Next.js
 CMD ["npm", "start"]
