@@ -1,18 +1,15 @@
-import { prisma } from '@/lib/db'
+import { withMongo } from '@/lib/mongo'
 import bcrypt from 'bcryptjs'
 import { NextResponse } from 'next/server'
-import { signSessionToken, ensureAdminUser } from '@/lib/auth'
+import { signSessionToken } from '@/lib/auth'
 
 export async function POST(request) {
   try {
-    await ensureAdminUser()
     const { email, password } = await request.json()
     if (!email || !password) {
       return NextResponse.json({ message: 'ایمیل و رمز عبور الزامی است' }, { status: 400 })
     }
-    const user = email.includes('@')
-      ? await prisma.user.findUnique({ where: { email } })
-      : await prisma.user.findUnique({ where: { username: email } })
+    const user = await withMongo(db => db.collection('users').findOne(email.includes('@') ? { email } : { username: email }))
     if (!user) {
       return NextResponse.json({ message: 'کاربر یافت نشد' }, { status: 404 })
     }
@@ -20,8 +17,8 @@ export async function POST(request) {
     if (!ok) {
       return NextResponse.json({ message: 'رمز عبور نادرست است' }, { status: 401 })
     }
-    const token = signSessionToken({ userId: user.id })
-    const res = NextResponse.json({ id: user.id, email: user.email, name: user.name, isAdmin: user.isAdmin, mayEditTimes: user.mayEditTimes })
+    const token = signSessionToken({ userId: String(user._id) })
+    const res = NextResponse.json({ id: String(user._id), email: user.email, name: user.name, isAdmin: !!user.isAdmin, mayEditTimes: !!user.mayEditTimes })
     res.cookies.set('token', token, {
       httpOnly: true,
       sameSite: 'lax',

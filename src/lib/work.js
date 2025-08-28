@@ -1,4 +1,4 @@
-import { prisma } from './db'
+import { withMongo, oid } from './mongo'
 
 function endOfLocalDay(date) {
   const d = new Date(date)
@@ -7,18 +7,25 @@ function endOfLocalDay(date) {
 
 export async function ensureMidnightStops(userId) {
   // Close any open periods that belong to previous days at 23:59:59.999 of their start date
-  const open = await prisma.workPeriod.findMany({ where: { userId, stoppedAt: null } })
+  const uid = oid(userId)
+  if (!uid) return
   const now = new Date()
-  const updates = []
-  for (const p of open) {
-    const sameDay = p.startedAt.getFullYear() === now.getFullYear() &&
-      p.startedAt.getMonth() === now.getMonth() &&
-      p.startedAt.getDate() === now.getDate()
-    if (!sameDay) {
-      updates.push(prisma.workPeriod.update({ where: { id: p.id }, data: { stoppedAt: endOfLocalDay(p.startedAt) } }))
+  await withMongo(async db => {
+    const open = await db.collection('workPeriods').find({ userId: uid, stoppedAt: null }).toArray()
+    const bulk = db.collection('workPeriods').initializeUnorderedBulkOp()
+    let count = 0
+    for (const p of open) {
+      const startedAt = new Date(p.startedAt)
+      const sameDay = startedAt.getFullYear() === now.getFullYear() &&
+        startedAt.getMonth() === now.getMonth() &&
+        startedAt.getDate() === now.getDate()
+      if (!sameDay) {
+        bulk.find({ _id: p._id }).updateOne({ $set: { stoppedAt: endOfLocalDay(startedAt) } })
+        count++
+      }
     }
-  }
-  if (updates.length) await prisma.$transaction(updates)
+    if (count > 0) await bulk.execute()
+  })
 }
 
 

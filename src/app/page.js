@@ -6,6 +6,7 @@ import jalaliday from 'jalaliday'
 import ReactECharts from 'echarts-for-react'
 import * as echarts from 'echarts'
 import { toGregorian } from 'jalaali-js'
+import Select2Project from './components/Select2Project'
 import { msToHours } from '@/lib/utils'
 
 dayjs.extend(jalaliday)
@@ -16,6 +17,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({ email: "", password: "", name: "" });
+  const [setup, setSetup] = useState({ configured: true });
+  const [dbForm, setDbForm] = useState({ uri: "", dbName: "" });
   const [taskForm, setTaskForm] = useState({ title: "", description: "", projectId: undefined });
   const [periods, setPeriods] = useState([]);
   const [editing, setEditing] = useState(null);
@@ -45,6 +48,7 @@ export default function Home() {
       }
       setLoading(false);
     });
+    fetch('/api/setup').then(async r => { if (r.ok) setSetup(await r.json()) })
   }, []);
 
   useEffect(() => {
@@ -177,7 +181,7 @@ export default function Home() {
     const res = await fetch("/api/work", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(selectedProjectId ? { projectId: Number(selectedProjectId) } : {}),
+      body: JSON.stringify(selectedProjectId ? { projectId: String(selectedProjectId) } : {}),
     });
     if (res.ok) {
       await loadData();
@@ -292,6 +296,35 @@ export default function Home() {
   if (!user) {
     return (
       <div className="max-w-md w-full mx-auto p-6">
+        {!setup.configured && (
+          <section className="border rounded p-4 mb-4">
+            <h3 className="font-bold mb-3">پیکربندی اتصال دیتابیس (MongoDB)</h3>
+            <div className="grid gap-2">
+              <input className="border p-2 rounded" placeholder="آدرس دیتابیس (host)" value={dbForm.host || ''} onChange={e => setDbForm({ ...dbForm, host: e.target.value })} />
+              <input className="border p-2 rounded" placeholder="پورت" value={dbForm.port || ''} onChange={e => setDbForm({ ...dbForm, port: e.target.value })} />
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!dbForm.useAuth} onChange={e => setDbForm({ ...dbForm, useAuth: e.target.checked })} /> احراز هویت</label>
+              {!!dbForm.useAuth && (
+                <>
+                  <input className="border p-2 rounded" placeholder="نام کاربری دیتابیس" value={dbForm.username || ''} onChange={e => setDbForm({ ...dbForm, username: e.target.value })} />
+                  <input className="border p-2 rounded" type="password" placeholder="رمز عبور دیتابیس" value={dbForm.password || ''} onChange={e => setDbForm({ ...dbForm, password: e.target.value })} />
+                </>
+              )}
+              <input className="border p-2 rounded" placeholder="نام دیتابیس (dbName)" value={dbForm.dbName || ''} onChange={e => setDbForm({ ...dbForm, dbName: e.target.value })} />
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button className="bg-gray-200 rounded px-3 py-2" onClick={async () => {
+                const r = await fetch('/api/setup', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dbForm) })
+                const ok = r.ok && (await r.json()).ok
+                alert(ok ? 'اتصال موفق بود' : 'اتصال ناموفق بود')
+                setDbForm({ ...dbForm, _testOk: !!ok })
+              }}>تست اتصال</button>
+              <button disabled={!dbForm._testOk} className={`rounded px-3 py-2 ${dbForm._testOk?'bg-black text-white':'bg-gray-300 text-gray-600 cursor-not-allowed'}`} onClick={async () => {
+                const r = await fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dbForm) })
+                if (r.ok) { setSetup({ configured: true }); alert('تنظیمات ذخیره شد') } else alert('ذخیره تنظیمات ناموفق بود')
+              }}>ذخیره تنظیمات</button>
+            </div>
+          </section>
+        )}
         <div className="flex mb-4 gap-2">
           <button className={`${authMode === "login" ? "font-bold" : ""}`} onClick={() => setAuthMode("login")}>ورود</button>
           <button className={`${authMode === "register" ? "font-bold" : ""}`} onClick={() => setAuthMode("register")}>ثبت‌نام</button>
@@ -304,7 +337,6 @@ export default function Home() {
           <input className="border p-2 rounded" type="password" placeholder="رمز عبور" value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} />
           <button className="bg-black text-white rounded p-2" type="submit">{authMode === "login" ? "ورود" : "ثبت‌نام"}</button>
         </form>
-        <div className="text-xs text-gray-500 mt-3">ادمین: نام‌کاربری <b>admin</b>، رمز <b>6006296</b></div>
       </div>
     );
   }
@@ -319,15 +351,16 @@ export default function Home() {
           )}
         </div>
         <div className="flex gap-3 items-center">
-          <span className="text-sm btn-muted">سپری‌شده امروز: {formatDuration(computeElapsedForProjectToday(now, selectedProjectId ? Number(selectedProjectId) : null))}</span>
+          <span className="text-sm btn-muted">سپری‌شده امروز: {formatDuration(computeElapsedForProjectToday(now, selectedProjectId ? String(selectedProjectId) : null))}</span>
           {!hasOpen && (
             <>
-              <select className="input text-sm" value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)}>
-                <option value="">پروژه (اختیاری)</option>
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              <Select2Project
+                className="w-56"
+                value={selectedProjectId}
+                onChange={setSelectedProjectId}
+                options={projects.map(p => ({ id: p.id, text: p.name }))}
+                placeholder="پروژه (اختیاری)"
+              />
               <button className="btn btn-primary" onClick={startWork}>استارت</button>
             </>
           )}
@@ -355,12 +388,13 @@ export default function Home() {
                 <form onSubmit={addTask} className="flex flex-col gap-3">
                   <input className="input" placeholder="عنوان تسک" value={taskForm.title} onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })} />
                   <textarea className="input" placeholder="توضیحات (اختیاری)" value={taskForm.description} onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })} />
-                  <select className="input" value={taskForm.projectId ?? ''} onChange={e => setTaskForm({ ...taskForm, projectId: e.target.value ? Number(e.target.value) : undefined })}>
-                    <option value="">انتخاب پروژه (اختیاری)</option>
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+                  <Select2Project
+                    className="w-full"
+                    value={taskForm.projectId ?? ''}
+                    onChange={(v) => setTaskForm({ ...taskForm, projectId: v || undefined })}
+                    options={projects.map(p => ({ id: p.id, text: p.name }))}
+                    placeholder="انتخاب پروژه (اختیاری)"
+                  />
                   <button className="btn btn-primary" type="submit">افزودن</button>
                 </form>
               </section>

@@ -1,0 +1,9 @@
+{
+  "mode": "parts",
+  "host": "mongodb.dockbase.space",
+  "port": 27017,
+  "useAuth": true,
+  "username": "root",
+  "password": "09186006296",
+  "dbName": "workina"
+}

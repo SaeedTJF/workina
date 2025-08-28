@@ -6,12 +6,14 @@ export default function AdminPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState(0);
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [selected, setSelected] = useState(null);
   const [projects, setProjects] = useState([])
   const [newProject, setNewProject] = useState('')
   const [newProjectColor, setNewProjectColor] = useState('#5470C6')
   const [colorDrafts, setColorDrafts] = useState({})
+  const [setup, setSetup] = useState({ configured: true })
+  const [dbForm, setDbForm] = useState({ uri: '', dbName: '' })
 
   useEffect(() => {
     fetch('/api/admin').then(async r => {
@@ -21,6 +23,7 @@ export default function AdminPage() {
     fetch('/api/admin/projects').then(async r => {
       if (r.ok) setProjects((await r.json()).projects)
     })
+    fetch('/api/setup').then(async r => { if (r.ok) setSetup(await r.json()) })
   }, []);
 
   if (loading) return <div className="p-6">در حال بارگذاری...</div>;
@@ -75,7 +78,7 @@ export default function AdminPage() {
                       <input type="color" className="w-10 h-10 p-0 border rounded" value={colorDrafts[p.id] ?? p.color ?? '#5470C6'} onChange={e => setColorDrafts({ ...colorDrafts, [p.id]: e.target.value })} />
                       <button className="bg-gray-200 rounded px-2 py-1" onClick={async () => {
                         const chosen = (colorDrafts[p.id] ?? p.color ?? '#5470C6')
-                        const r = await fetch('/api/admin/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: Number(p.id), color: chosen }) })
+                        const r = await fetch('/api/admin/projects', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: String(p.id), color: chosen }) })
                         if (r.ok) {
                           const pr = await fetch('/api/admin/projects')
                           if (pr.ok) setProjects((await pr.json()).projects)
@@ -103,12 +106,47 @@ export default function AdminPage() {
         <h1 className="text-xl font-bold">پنل مدیریت</h1>
         <div className="flex items-center gap-2">
           <Link className="bg-gray-200 rounded px-3 py-2" href={"/"}>خانه</Link>
+          <button className="bg-gray-200 rounded px-3 py-2" onClick={async () => {
+            const r = await fetch('/api/admin/db', { method: 'POST' })
+            if (r.ok) alert('ساختار دیتابیس ایجاد شد')
+            else alert('خطا در ایجاد ساختار دیتابیس')
+          }}>پیکربندی دیتابیس</button>
           <button className="bg-black text-white rounded px-3 py-2" onClick={async () => { await fetch('/api/auth/login', { method: 'DELETE' }); location.href = '/'; }}>خروج</button>
         </div>
       </div>
+      {!setup.configured && (
+        <section className="border rounded p-4 mb-6">
+          <h2 className="font-semibold mb-3">تنظیمات اتصال دیتابیس (MongoDB)</h2>
+          <div className="grid md:grid-cols-2 gap-3">
+            <input className="border rounded p-2" placeholder="آدرس دیتابیس (host)" value={dbForm.host || ''} onChange={e => setDbForm({ ...dbForm, host: e.target.value })} />
+            <input className="border rounded p-2" placeholder="پورت" value={dbForm.port || ''} onChange={e => setDbForm({ ...dbForm, port: e.target.value })} />
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!dbForm.useAuth} onChange={e => setDbForm({ ...dbForm, useAuth: e.target.checked })} /> احراز هویت</label>
+            <span></span>
+            {!!dbForm.useAuth && (
+              <>
+                <input className="border rounded p-2" placeholder="نام کاربری دیتابیس" value={dbForm.username || ''} onChange={e => setDbForm({ ...dbForm, username: e.target.value })} />
+                <input className="border rounded p-2" type="password" placeholder="رمز عبور دیتابیس" value={dbForm.password || ''} onChange={e => setDbForm({ ...dbForm, password: e.target.value })} />
+              </>
+            )}
+            <input className="border rounded p-2" placeholder="نام دیتابیس (dbName)" value={dbForm.dbName || ''} onChange={e => setDbForm({ ...dbForm, dbName: e.target.value })} />
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button className="bg-gray-200 rounded px-3 py-2" onClick={async () => {
+              const r = await fetch('/api/setup', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dbForm) })
+              const ok = r.ok && (await r.json()).ok
+              alert(ok ? 'اتصال موفق بود' : 'اتصال ناموفق بود')
+              setDbForm({ ...dbForm, _testOk: !!ok })
+            }}>تست اتصال</button>
+            <button disabled={!dbForm._testOk} className={`rounded px-3 py-2 ${dbForm._testOk?'bg-black text-white':'bg-gray-300 text-gray-600 cursor-not-allowed'}`} onClick={async () => {
+              const r = await fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dbForm) })
+              if (r.ok) { setSetup({ configured: true }); alert('تنظیمات ذخیره شد') } else alert('ذخیره تنظیمات ناموفق بود')
+            }}>ذخیره تنظیمات</button>
+          </div>
+        </section>
+      )}
       <div className="flex gap-2 items-center mb-6">
-        <select className="border rounded p-2" value={selectedUserId} onChange={e => setSelectedUserId(Number(e.target.value))}>
-          <option value={0}>انتخاب کاربر...</option>
+        <select className="border rounded p-2" value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)}>
+          <option value="">انتخاب کاربر...</option>
           {data.users.map(u => (
             <option key={u.id} value={u.id}>{u.name || u.username || u.email}</option>
           ))}

@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken'
 import { cookies } from 'next/headers'
-import { prisma } from './db'
+import { withMongo, oid } from './mongo'
 import bcrypt from 'bcryptjs'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me'
@@ -32,18 +32,33 @@ export async function getCurrentUser() {
   if (!token) return null
   try {
     const decoded = jwt.verify(token, JWT_SECRET)
-    const user = await prisma.user.findUnique({ where: { id: decoded.userId } })
-    return user
+    const user = await withMongo(db => db.collection('users').findOne({ _id: oid(decoded.userId) }))
+    if (!user) return null
+    return {
+      id: String(user._id),
+      email: user.email,
+      username: user.username,
+      name: user.name,
+      isAdmin: !!user.isAdmin,
+      mayEditTimes: !!user.mayEditTimes,
+    }
   } catch {
     return null
   }
 }
 
 export async function ensureAdminUser() {
-  const existing = await prisma.user.findFirst({ where: { OR: [{ username: 'admin' }, { email: 'admin@local' }] } })
-  if (existing) return existing
-  const passwordHash = await bcrypt.hash('6006296', 10)
-  return prisma.user.create({ data: { username: 'admin', email: 'admin@local', name: 'ادمین', passwordHash, isAdmin: true } })
+  // In Mongo mode we do not auto-create admin silently.
+  // Keep function for backward compatibility; return null if exists, otherwise null.
+  const existing = await withMongo(db => db.collection('users').findOne({ $or: [{ username: 'admin' }, { email: 'admin@local' }] }))
+  return existing ? {
+    id: String(existing._id),
+    email: existing.email,
+    username: existing.username,
+    name: existing.name,
+    isAdmin: !!existing.isAdmin,
+    mayEditTimes: !!existing.mayEditTimes,
+  } : null
 }
 
 
